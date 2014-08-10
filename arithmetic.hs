@@ -1,3 +1,7 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+
+import Data.Ratio as Ra
+
 {- Type of a dyadic rational, a bit like floating point except that operations can be performed exactly.
 
   resource tells you which maximum denominator to use for inexact operations
@@ -8,10 +12,10 @@
 data DyadicRational = DyadicRational {num :: Int, denom :: Int, maxDenom :: Int} deriving Show
 
 instance Eq DyadicRational where
-        x == y = (num x * denom y) == (num y * denom x)
+        x == y = (num x * 2 ^ denom y) == (num y * 2 ^ denom x)
 
 instance Ord DyadicRational where
-	compare x y = (num x * denom y) `compare` (num y * denom x)
+	compare x y = (num x * 2 ^ denom y) `compare` (num y * 2 ^ denom x)
 
 resource = 10 :: Int
 
@@ -44,6 +48,15 @@ mul x y =
 	let numz = num x * num y in
 	DyadicRational {num = numz , denom = expz , maxDenom = maxDenomz}
 
+
+-- simplify a Dyadic rational
+simplify :: DyadicRational -> DyadicRational
+simplify x =
+	let largePower :: Int = 2 ^ denom x in
+	let remove :: Int = num x `gcd` largePower in
+	let lb :: Int = (round $ logBase (fromIntegral remove) 2.0) in
+	DyadicRational {num = num x `div` remove, denom = denom x - lb, maxDenom = maxDenom x}
+
 -- lower approximation to integer reciprocal
 recpFloor :: Int -> DyadicRational
 recpFloor k = 
@@ -72,6 +85,8 @@ toDouble x =
 
 
 data Interval = Interval {lower :: DyadicRational, upper :: DyadicRational}
+
+zero = Interval {lower = fromInt 0, upper = fromInt 0}
 
 instance Show Interval where
 	show x = if lower x == upper x
@@ -104,7 +119,7 @@ instance Num Interval where
 instance Fractional Interval where
 	recip x = Interval {lower = recpFloor1 $ upper x , upper = recpCeil1 $ lower x}
 	fromRational x = error "seriously you guys"
-	
+
 toList :: Interval -> [DyadicRational]
 toList i0 = [lower i0, upper i0]
 
@@ -115,3 +130,22 @@ apply2 :: (DyadicRational -> DyadicRational -> DyadicRational) -> Interval -> In
 apply2 f i0 i1 =
 	let vals = [ f x y | x <- toList i0 , y <- toList i1 ] in
 	Interval {lower = minimum vals, upper = maximum vals}
+
+-- split interval splits the interval into a positive and negative component.
+splitInterval :: Interval -> [Interval]
+splitInterval i0 =
+	if (i0 == zero)
+		then [zero]
+		else
+			let up = upper i0 in
+			let down = lower i0 in
+			let raw = [Interval { lower = down, upper = fromInt 0 }, Interval { lower = fromInt 0, upper = up}] in
+			filter (\ i1 -> (upper i1 /= lower i1)) raw
+
+
+
+
+
+
+
+
